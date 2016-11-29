@@ -27,7 +27,7 @@ for i in range (0,5):
     protocol.opcode_ping(session)
     end_time = datetime.datetime.now()
     response_delay = (end_time - start_time).microseconds / 1000
-    if response_delay > 90:
+    if response_delay > 500:
         print "Response time too long:", response_delay
         exit(1)
     time.sleep(0.3)
