@@ -12,6 +12,7 @@ argparser.add_argument('--protocol', help='protocol version', type=int, required
 argparser.add_argument('--key', help='client key', type=str, required=True)
 argparser.add_argument('--envid', help='environment id', type=int, required=True)
 args = argparser.parse_args()
+print args
 
 # loading requested protocol
 protocol = __import__('protocol.v' + str(args.protocol), globals(), locals(), ['object'], -1)
@@ -28,7 +29,6 @@ for i in range (0,5):
     response_delay = (end_time - start_time).microseconds / 1000
     if response_delay > 90:
         print "Response time too long:", response_delay
-        print args
         exit(1)
     time.sleep(0.3)
 session.close()
