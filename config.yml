@@ -1,0 +1,18 @@
+smtp:
+  host: smtp.mailgun.org
+  port: 587
+  login:
+  password:
+  from:
+  subject: Healthcheck warning
+  to:
+    - oleg@example.com
+services:
+  2.0:
+    protocol:
+    host:
+    port:
+    envid:
+    key:
+    user:
+    password:
