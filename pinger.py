@@ -17,10 +17,10 @@ argparser.add_argument('--envid', help='environment id', type=int, required=True
 argparser.add_argument('--user', help='username', type=str )
 argparser.add_argument('--password', help='password', type=str)
 args = argparser.parse_args()
-print ( args )
+print(args)
 
 # loading requested protocol
-protocol = importlib.import_module( 'protocol.v' + str(args.protocol))
+protocol = importlib.import_module('protocol.v' + str(args.protocol))
 
 session = socks.socksocket()
 session.set_proxy(socks.SOCKS4, args.host, 443)
@@ -29,13 +29,13 @@ session.connect(('127.0.0.1', args.port))
 protocol.opcode_init(session, args.protocol,args.envid, args.key)
 if args.user is not None and args.password is not None:
     protocol.opcode_login(session, args.user, args.password)
-for i in range (0, args.ping):
+for i in range(0, args.ping):
     start_time = datetime.datetime.now()
     protocol.opcode_ping(session)
     end_time = datetime.datetime.now()
     response_delay = (end_time - start_time).microseconds / 1000
     if response_delay > args.ping_timeout:
-        print ( "Response time too long:", response_delay )
+        print("Response time too long:", response_delay)
         exit(1)
     time.sleep(0.3)
 
