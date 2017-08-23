@@ -1,5 +1,33 @@
 import struct
 
+errors = [
+    'NONE',
+    'BAD_DATA',
+    'DB_ERROR',
+    'SERVER_ERROR',
+    'ALREADY_EXISTS',
+    'NOT_FOUND',
+    'FILE_SAVE_ERROR',
+    'FILE_NOT_FOUND',
+    'MUST_BE_LOGGED',
+    'MUST_NOT_BE_LOGGED',
+    'DB_CONNECTION_ERROR',
+    'CACHE_ERROR',
+    'TEAM_NAME_CAN_NOT_BE_EMPTY',
+    'DISPLAY_NAME_CAN_NOT_BE_EMPTY',
+    'EMAIL_CAN_NOT_BE_EMPTY',
+    'INVALID_EMAIL_FORMAT',
+    'PASSWORD_CAN_NOT_BE_EMPTY',
+    'RECORD_NOT_FOUND',
+    'DISCONNECTED',
+    'EMAIL_ALREADY_EXISTS',
+    'SEND_EMAIL',
+    'OPCODE_NOT_FOUND',
+    'BLOCKED',
+    'REMOVED',
+    'CLIENT_BLOCKED',
+    'ARRAY_SIZE_TOO_BIG',
+]
 
 def bytes_to_str(s):
     return "-".join("{:02x}".format(ord(chr(c))) for c in s)
@@ -20,9 +48,12 @@ def opcode_init(session, protocol, envid, key):
     data = session.recv(16)
     print(bytes_to_str(data))
     answer = struct.unpack('<HIBBB', data)
-    if answer[0] != 1 or answer[3] != protocol:
+    if answer[0] != 1:
         print("Wrong response")
-        exit(1)
+        exit(answer[2])
+    elif answer[2] != 0:
+        print('Error: %s, expected proto: %s' % (errors[answer[2]], answer[3]))
+        exit(answer[2])
 
 
 def opcode_ping(session):
@@ -55,8 +86,8 @@ def opcode_login(session, username, password):
         exit(1)
     data_parsed = struct.unpack('<HI' + str(data_info[1]) + 'b', data)
     if data_parsed[1] == 1:
-        print("Login failed, error code", data_parsed[2])
-        exit(1)
+        print("Login error: %s" % errors[data_parsed[2]])
+        exit(data_parsed[1])
 
 
 def opcode_logout(session):
@@ -74,4 +105,4 @@ def opcode_logout(session):
     data_parsed = struct.unpack('<HI' + str(data_info[1]) + 'b', data)
     if data_parsed[2] != 0:
         print("Logout failed")
-        exit(1)
+        exit(data_parsed[2])
