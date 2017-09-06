@@ -38,7 +38,7 @@ for service in config['services']:
                 s.sendmail(msg['From'], msg['To'], msg.as_string())
                 s.quit()
     if args.slack:
-        if dnp_ping.returncode == 0:
+        if dnp_ping.returncode != 0:
             slack_message = '<!here> Warrning ' + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
             slack_message = 'Backend v' + str(service) + ' OK'
