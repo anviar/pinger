@@ -29,6 +29,7 @@ errors = [
     'ARRAY_SIZE_TOO_BIG',
 ]
 
+
 def bytes_to_str(s):
     return "-".join("{:02x}".format(ord(chr(c))) for c in s)
 
@@ -50,11 +51,10 @@ def opcode_init(session, protocol, envid, key):
     answer = struct.unpack('<HIBBB', data)
     if answer[0] != 1:
         print("Wrong response")
-        exit(answer[2])
+        exit(1)
     elif answer[2] != 0:
         print('Error: %s, expected proto: %s' % (errors[answer[2]], answer[3]))
-        exit(answer[2])
-
+        exit(1)
 
 def opcode_ping(session):
     data = struct.pack('<HI', 0,0)
@@ -65,7 +65,8 @@ def opcode_ping(session):
     data = session.recv(16)
     print(bytes_to_str(data))
     data_size = struct.unpack('<HI', data[:6])[1]
-    struct.unpack('<HI' + str(data_size) + 'b', data)
+    data_parsed = struct.unpack('<HI' + str(data_size) + 'b', data)
+    #print(data_parsed)
 
 
 def opcode_login(session, username, password):
@@ -87,7 +88,7 @@ def opcode_login(session, username, password):
     data_parsed = struct.unpack('<HI' + str(data_info[1]) + 'b', data)
     if data_parsed[1] == 1:
         print("Login error: %s" % errors[data_parsed[2]])
-        exit(data_parsed[1])
+        exit(1)
 
 
 def opcode_logout(session):
@@ -104,5 +105,5 @@ def opcode_logout(session):
         exit(1)
     data_parsed = struct.unpack('<HI' + str(data_info[1]) + 'b', data)
     if data_parsed[2] != 0:
-        print("Logout failed")
-        exit(data_parsed[2])
+        print("Logout error: %s" % errors[data_parsed[2]])
+        exit(1)
