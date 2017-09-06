@@ -10,6 +10,7 @@ import requests
 import json
 import platform
 import sys
+from datetime import datetime
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check configured services health')
@@ -27,7 +28,9 @@ for service in config['services']:
     for key, value in config['services'][service].items():
         command.append('--' + key)
         command.append(str(value))
+    start_time = datetime.now()
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    end_time = datetime.now()
     if dnp_ping.returncode != 0:
         if args.mail:
             for recepient in config['smtp']['to']:
@@ -43,7 +46,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = platform.node() + ': v' + str(service) + ' OK'
+            slack_message = "%s: v%s OK for %i seconds" % (platform.node(), service (end_time - start_time).seconds)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
