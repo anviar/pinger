@@ -46,7 +46,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "%s: v%s OK for %i seconds" % (platform.node(), service, (end_time - start_time).seconds)
+            slack_message = "%s: v%s OK completed in %i seconds" % (platform.node(), service, (end_time - start_time).seconds)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
