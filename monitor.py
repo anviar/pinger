@@ -8,6 +8,7 @@ from email.mime.text import MIMEText
 from argparse import ArgumentParser
 import requests
 import json
+import platform
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check configured services health')
@@ -39,9 +40,9 @@ for service in config['services']:
                 s.quit()
     if args.slack:
         if dnp_ping.returncode != 0:
-            slack_message = '<!here> Warrning ' + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
+            slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = 'Backend v' + str(service) + ' OK'
+            slack_message = platform.node() + ': v' + str(service) + ' OK'
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
