@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 import requests
 import json
 import platform
+import sys
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check configured services health')
@@ -22,7 +23,7 @@ with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
     config = yaml.load(config_obj)
 
 for service in config['services']:
-    command = [os.path.join(workdir,"pinger.py")]
+    command = [sys.executable, os.path.join(workdir,"pinger.py")]
     for key, value in config['services'][service].items():
         command.append('--' + key)
         command.append(str(value))
