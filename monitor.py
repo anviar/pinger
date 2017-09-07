@@ -49,7 +49,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "[%s UTC] %s: v%s OK" % (datetime.utcnow().strftime('%Y-%m-%d %H:%m'), nodename, service)
+            slack_message = "[%s UTC] %s: v%s OK" % (datetime.utcnow().strftime('%Y-%m-%d %H:%M'), nodename, service)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
