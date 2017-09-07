@@ -23,14 +23,17 @@ workdir = os.path.dirname(os.path.realpath(__file__))
 with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
     config = yaml.load(config_obj)
 
+if 'nodename' not in config:
+    nodename = platform.node()
+else:
+    nodename = config['nodename']
+
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir,"pinger.py")]
     for key, value in config['services'][service].items():
         command.append('--' + key)
         command.append(str(value))
-    start_time = datetime.now()
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    end_time = datetime.now()
     if dnp_ping.returncode != 0:
         if args.mail:
             for recepient in config['smtp']['to']:
@@ -46,7 +49,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "%s: v%s OK completed in %i seconds" % (platform.node(), service, (end_time - start_time).seconds)
+            slack_message = "[%s] %s: v%s OK" % (datetime.now().strftime('%Y-%m-%d %H:%m'), nodename, service)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
