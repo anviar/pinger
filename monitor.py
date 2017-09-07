@@ -28,6 +28,11 @@ if 'nodename' not in config:
 else:
     nodename = config['nodename']
 
+if 'timestamp' not in config:
+    timestamp_format = '%H:%M UTC'
+else:
+    timestamp_format = config['timestamp']
+
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir,"pinger.py")]
     for key, value in config['services'][service].items():
@@ -49,7 +54,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "[%s UTC] %s: v%s OK" % (datetime.utcnow().strftime('%Y-%m-%d %H:%M'), nodename, service)
+            slack_message = "[%s] %s: v%s OK" % (datetime.utcnow().strftime(timestamp_format), nodename, service)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
