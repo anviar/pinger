@@ -34,10 +34,7 @@ else:
     timestamp_format = config['timestamp']
 
 for service in config['services']:
-    command = [sys.executable, os.path.join(workdir,"pinger.py")]
-    for key, value in config['services'][service].items():
-        command.append('--' + key)
-        command.append(str(value))
+    command = [sys.executable, os.path.join(workdir,"pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if dnp_ping.returncode != 0:
         if args.mail:
@@ -52,9 +49,9 @@ for service in config['services']:
                 s.quit()
     if args.slack:
         if dnp_ping.returncode != 0:
-            slack_message = '<!here> ' + platform.node() + '```' + dnp_ping.stdout.decode("UTF-8") + '```'
+            slack_message = '<!here> ' + platform.node() + ' ```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "[%s] %s: v%s OK" % (datetime.utcnow().strftime(timestamp_format), nodename, service)
+            slack_message = "[%s] %s: %s OK" % (datetime.utcnow().strftime(timestamp_format), nodename, service)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
