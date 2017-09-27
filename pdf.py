@@ -15,6 +15,8 @@ with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
 argparser = ArgumentParser(description='Check PDF health')
 argparser.add_argument('--service', help='service name', choices=[str(s) for s in config['services']], required=True)
 argparser.add_argument('--send', help='send PDF sample', action="store_true")
+argparser.add_argument('--pop3', help='check pop3 mailbox', action="store_true")
+argparser.add_argument('--mailgun', help='check mailgun API', action="store_true")
 args = argparser.parse_args()
 
 if args.send:
@@ -42,7 +44,7 @@ if args.send:
 
     protocol.opcode_logout(session)
     session.close()
-else:
+elif args.pop3:
     import poplib
     from datetime import datetime
 
@@ -75,3 +77,22 @@ else:
                     r_time = datetime.strptime(h.split(';')[-1].strip(), '%a, %d %b %Y %H:%M:%S %z')
                     break
             print("%s: %s" % (str(r_time), subject))
+elif args.mailgun:
+    import requests
+    import json
+    from datetime import datetime
+
+    r = json.loads(requests.get(
+        config['mailgun']['url'] + '/events',
+        auth=("api", config['mailgun']['key']),
+    ).text)
+    for item in r['items']:
+        if (
+                item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
+            and 'delivery-status' in item
+        ):
+            pdf_timestamp = datetime.fromtimestamp(
+                int(item['message']['headers']['subject'].split(':')[1]) // 1000
+            )
+            delivery_timestamp = datetime.fromtimestamp(item['timestamp'])
+            print("%s: %s ~ %s" % (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
