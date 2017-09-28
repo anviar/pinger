@@ -51,7 +51,7 @@ def opcode_pdf_pinger(session, recipients):
         print("Wrong response")
         exit(1)
     data_parsed = struct.unpack('<HI' + str(data_info[1]) + 'b', data)
-    if data_parsed[1] == 1:
+    if data_parsed[2] != 0:
         print("PDF ping error: %s" % errors[data_parsed[2]])
         exit(1)
 
