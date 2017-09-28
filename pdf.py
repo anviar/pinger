@@ -17,6 +17,7 @@ argparser.add_argument('--service', help='service name', choices=[str(s) for s i
 argparser.add_argument('--send', help='send PDF sample', action="store_true")
 argparser.add_argument('--pop3', help='check pop3 mailbox', action="store_true")
 argparser.add_argument('--mailgun', help='check mailgun API', action="store_true")
+argparser.add_argument('--mail', help='send mail about warnings', action="store_true")
 args = argparser.parse_args()
 
 if args.send:
@@ -86,13 +87,28 @@ elif args.mailgun:
         config['mailgun']['url'] + '/events',
         auth=("api", config['mailgun']['key']),
     ).text)
+    result = list()
     for item in r['items']:
         if (
                 item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
             and 'delivery-status' in item
         ):
             pdf_timestamp = datetime.fromtimestamp(
-                int(item['message']['headers']['subject'].split(':')[1]) // 1000
+                int(item['message']['headers']['subject'].split(':')[1]) / 1000
             )
             delivery_timestamp = datetime.fromtimestamp(item['timestamp'])
-            print("%s: %s ~ %s" % (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
+            result.append("%s: %s ~ %s" % (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
+    if args.mail:
+        from email.mime.text import MIMEText
+        import smtplib
+        for recepient in config['smtp']['to']:
+            msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
+            msg['Subject'] = config['smtp']['subject'] + ' ' + str(service)
+            msg['From'] = config['smtp']['from']
+            msg['To'] = recepient
+            s = smtplib.SMTP(config['smtp']['host'], config['smtp']['port'])
+            s.login(config['smtp']['login'], config['smtp']['password'])
+            s.sendmail(msg['From'], msg['To'], msg.as_string())
+            s.quit()
+    else:
+        print('\n'.join(result))
