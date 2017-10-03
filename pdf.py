@@ -130,5 +130,12 @@ elif args.mailgun:
                 headers={'Content-type': 'application/json'},
                 data=json.dumps({'text': slack_message})
             )
+        if len(result_d) == 0:
+            slack_message = '<!here> no mails found at mailgun logs!'
+            requests.post(
+                config['slack'],
+                headers={'Content-type': 'application/json'},
+                data=json.dumps({'text': slack_message})
+            )
     else:
         print('\n'.join(result))
