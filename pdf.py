@@ -115,9 +115,9 @@ elif args.mailgun:
         else:
             nodename = config['nodename']
         for item in result_d:
-            if result_d[item]['delta'] > timedelta(minutes=1):
-                slack_message = '<!here> ```%s: PDF %s - warning```' % \
-                                (result_d[item]['target'], result_d[item]['delta'])
+            if result_d[item]['delta'] > timedelta(minutes=5):
+                slack_message = '<!here> at %s```%s: PDF %s - warning```' % \
+                                (result_d[item]['delivered'], result_d[item]['target'], result_d[item]['delta'])
             else:
                 slack_message = "[%s] %s: to <%s> at %s PDF ~ %s - OK" % \
                                 (datetime.utcnow().strftime(timestamp_format),
