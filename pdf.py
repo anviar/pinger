@@ -100,7 +100,8 @@ elif args.mailgun:
             if pdf_timestamp not in result_d:
                 result_d.update({pdf_timestamp: {
                     'target': item['envelope']['targets'],
-                    'delta': delivery_timestamp - pdf_timestamp
+                    'delta': delivery_timestamp - pdf_timestamp,
+                    'delivered': delivery_timestamp.strftime('%Y %b %d %H:%M:%S')
                 }})
             result.append("%s: %s ~ %s" %
                           (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
@@ -118,9 +119,11 @@ elif args.mailgun:
                 slack_message = '<!here> ```%s: PDF %s - warning```' % \
                                 (result_d[item]['target'], result_d[item]['delta'])
             else:
-                slack_message = "[%s] %s: PDF ~ %s - OK" % \
+                slack_message = "[%s] %s: to <%s> at %s PDF ~ %s - OK" % \
                                 (datetime.utcnow().strftime(timestamp_format),
+                                 args.service,
                                  result_d[item]['target'],
+                                 result_d[item]['delivered'],
                                  result_d[item]['delta'])
             requests.post(
                 config['slack'],
