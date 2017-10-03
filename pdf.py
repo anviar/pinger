@@ -5,6 +5,10 @@ from argparse import ArgumentParser
 import importlib
 import yaml
 import os
+import platform
+from datetime import datetime, timedelta
+import requests
+import json
 
 workdir = os.path.dirname(os.path.realpath(__file__))
 
@@ -17,7 +21,7 @@ argparser.add_argument('--service', help='service name', choices=[str(s) for s i
 argparser.add_argument('--send', help='send PDF sample', action="store_true")
 argparser.add_argument('--pop3', help='check pop3 mailbox', action="store_true")
 argparser.add_argument('--mailgun', help='check mailgun API', action="store_true")
-argparser.add_argument('--mail', help='send mail about warnings', action="store_true")
+argparser.add_argument('--slack', help='send slack notifications', action="store_true")
 args = argparser.parse_args()
 
 if args.send:
@@ -47,7 +51,6 @@ if args.send:
     session.close()
 elif args.pop3:
     import poplib
-    from datetime import datetime
 
     pop_client = poplib.POP3_SSL(config['pop3']['server'], port=config['pop3']['port'])
     pop_client.set_debuglevel(0)
@@ -79,15 +82,12 @@ elif args.pop3:
                     break
             print("%s: %s" % (str(r_time), subject))
 elif args.mailgun:
-    import requests
-    import json
-    from datetime import datetime
-
     r = json.loads(requests.get(
         config['mailgun']['url'] + '/events',
         auth=("api", config['mailgun']['key']),
     ).text)
     result = list()
+    result_d = dict()
     for item in r['items']:
         if (
                 item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
@@ -97,18 +97,35 @@ elif args.mailgun:
                 int(item['message']['headers']['subject'].split(':')[1]) / 1000
             )
             delivery_timestamp = datetime.fromtimestamp(item['timestamp'])
-            result.append("%s: %s ~ %s" % (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
-    if args.mail:
-        from email.mime.text import MIMEText
-        import smtplib
-        for recepient in config['smtp']['to']:
-            msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
-            msg['Subject'] = config['smtp']['subject'] + ' ' + str(service)
-            msg['From'] = config['smtp']['from']
-            msg['To'] = recepient
-            s = smtplib.SMTP(config['smtp']['host'], config['smtp']['port'])
-            s.login(config['smtp']['login'], config['smtp']['password'])
-            s.sendmail(msg['From'], msg['To'], msg.as_string())
-            s.quit()
+            if pdf_timestamp not in result_d:
+                result_d.update({pdf_timestamp: {
+                    'target': item['envelope']['targets'],
+                    'delta': delivery_timestamp - pdf_timestamp
+                }})
+            result.append("%s: %s ~ %s" %
+                          (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
+    if args.slack:
+        if 'timestamp' not in config:
+            timestamp_format = '%H:%M UTC'
+        else:
+            timestamp_format = config['timestamp']
+        if 'nodename' not in config:
+            nodename = platform.node()
+        else:
+            nodename = config['nodename']
+        for item in result_d:
+            if result_d[item]['delta'] > timedelta(minutes=1):
+                slack_message = '<!here> ```%s: PDF %s - warning```' % \
+                                (result_d[item]['target'], result_d[item]['delta'])
+            else:
+                slack_message = "[%s] %s: PDF ~ %s - OK" % \
+                                (datetime.utcnow().strftime(timestamp_format),
+                                 result_d[item]['target'],
+                                 result_d[item]['delta'])
+            requests.post(
+                config['slack'],
+                headers={'Content-type': 'application/json'},
+                data=json.dumps({'text': slack_message})
+            )
     else:
         print('\n'.join(result))
