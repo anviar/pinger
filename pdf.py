@@ -123,9 +123,7 @@ elif args.mailgun:
                           (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
             catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
     for ts in catalog:
-        pdf_timestamp = datetime.fromtimestamp(
-            int(item['message']['headers']['subject'].split(':')[1])
-        )
+        pdf_timestamp = datetime.fromtimestamp(int(ts))
         if datetime.utcnow() - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
             timeouts.append(pdf_timestamp)
             catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
