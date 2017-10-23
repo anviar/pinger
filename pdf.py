@@ -45,7 +45,8 @@ if args.send:
         config['services'][args.service]['password'])
     protocol.opcode_pdf_pinger(
         session,
-        config['services'][args.service]['pdf_recipients'])
+        config['services'][args.service]['pdf_recipients'],
+        int(datetime.utcnow().timestamp()))
 
     protocol.opcode_logout(session)
     session.close()

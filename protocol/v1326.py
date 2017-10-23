@@ -34,16 +34,27 @@ def bytes_to_str(s):
     return "-".join("{:02x}".format(ord(chr(c))) for c in s)
 
 
-def opcode_pdf_pinger(session, recipients):
+def opcode_pdf_pinger(session, recipients, timestamp):
     print('pdf_ping>', end=" ")
     recipients_str = ','.join(recipients)
-    data = struct.pack('<HII' + str(len(recipients_str)) + 's',
+    payload = struct.calcsize(
+        '<I' + str(len(str(timestamp) + str(len(recipients_str)) + recipients_str)) + 's')
+    data = struct.pack('<HIII' + str(len(recipients_str)) + 's',
                         80,
-                        struct.calcsize('<I' + str(len(recipients_str)) + 's'),
+                        payload,
+                        timestamp,
                         len(recipients_str), bytes(recipients_str, 'UTF-8'))
-    print(bytes_to_str(data))
+    print("[%i bytes] %s " % (len(data), bytes_to_str(data)))
     session.send(data)
-    print('pdf_ping<', end=" ")
+    print('Structure: <HIII' + str(len(recipients_str)) + 's')
+    print('opcode: ' + bytes_to_str(struct.pack('<H', 80)))
+    print('payload(%i): %s' % (payload, bytes_to_str(struct.pack('<I', payload))))
+    print('timestamp(%i): %s' % (timestamp, bytes_to_str(struct.pack('<I', timestamp))))
+    print('stringsize(%i): %s' % (len(recipients_str), bytes_to_str(struct.pack('<I', len(recipients_str)))))
+    print('reciepients(%s): %s' %
+          (recipients_str,
+           bytes_to_str(struct.pack('<%is' % len(recipients_str), bytes(recipients_str, 'UTF-8')))))
+    print('pdf_ping<', end=" ", flush=True)
     data = session.recv(64)
     print(bytes_to_str(data))
     data_info = struct.unpack('<HI', data[:6])
