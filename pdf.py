@@ -11,6 +11,13 @@ import requests
 import json
 
 workdir = os.path.dirname(os.path.realpath(__file__))
+catalog_path = os.path.join(workdir, 'pdf_catalog')
+
+catalog = set()
+if os.path.isfile(catalog_path):
+    with open(catalog_path, 'rt') as catalog_obj:
+        for line in catalog_obj:
+            catalog.add(line.strip())
 
 with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
     config = yaml.load(config_obj)
@@ -33,7 +40,7 @@ if args.send:
     session.set_proxy(socks.SOCKS4, config['services'][args.service]['host'], 443)
     session.settimeout(config['services'][args.service]['timeout'])
     session.connect(('127.0.0.1', config['services'][args.service]['port']))
-
+    pdf_timestamp = int(datetime.utcnow().timestamp())
     protocol.opcode_init(
         session,
         config['services'][args.service]['protocol'],
@@ -46,8 +53,11 @@ if args.send:
     protocol.opcode_pdf_pinger(
         session,
         config['services'][args.service]['pdf_recipients'],
-        int(datetime.utcnow().timestamp()))
-
+        pdf_timestamp)
+    catalog.add(pdf_timestamp)
+    with open(catalog_path, 'wt') as catalog_obj:
+        for ts in catalog:
+            catalog_obj.write(str(ts) + '\n')
     protocol.opcode_logout(session)
     session.close()
 elif args.pop3:
@@ -89,15 +99,20 @@ elif args.mailgun:
     ).text)
     result = list()
     result_d = dict()
+    timeouts = list()
     for item in r['items']:
         if (
                 item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
             and 'delivery-status' in item
         ):
-            pdf_timestamp = datetime.fromtimestamp(
-                int(item['message']['headers']['subject'].split(':')[1]) / 1000
-            )
-            delivery_timestamp = datetime.fromtimestamp(item['timestamp'])
+            if item['message']['headers']['subject'].split(':')[1].strip() in catalog:
+                pdf_timestamp = datetime.fromtimestamp(
+                    int(item['message']['headers']['subject'].split(':')[1])
+                )
+            else:
+                # skip already processed messages
+                continue
+            delivery_timestamp = datetime.utcfromtimestamp(item['timestamp'])
             if pdf_timestamp not in result_d:
                 result_d.update({pdf_timestamp: {
                     'target': item['envelope']['targets'],
@@ -106,6 +121,18 @@ elif args.mailgun:
                 }})
             result.append("%s: %s ~ %s" %
                           (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
+            catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
+    for ts in catalog:
+        pdf_timestamp = datetime.fromtimestamp(
+            int(item['message']['headers']['subject'].split(':')[1])
+        )
+        if delivery_timestamp - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
+            timeouts.append(pdf_timestamp)
+            catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
+    # saving catalog state
+    with open(catalog_path, 'wt') as catalog_obj:
+        for ts in catalog:
+            catalog_obj.write(str(ts) + '\n')
     if args.slack:
         if 'timestamp' not in config:
             timestamp_format = '%H:%M UTC'
@@ -116,8 +143,8 @@ elif args.mailgun:
         else:
             nodename = config['nodename']
         for item in result_d:
-            if result_d[item]['delta'] > timedelta(minutes=5):
-                slack_message = '<!here> at %s```%s: PDF %s - warning```' % \
+            if result_d[item]['delta'] > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
+                slack_message = '<!here> at %s ``` %s: PDF %s - warning ```' % \
                                 (result_d[item]['delivered'], result_d[item]['target'], result_d[item]['delta'])
             else:
                 slack_message = "[%s] %s: to <%s> at %s PDF ~ %s - OK" % \
@@ -131,12 +158,11 @@ elif args.mailgun:
                 headers={'Content-type': 'application/json'},
                 data=json.dumps({'text': slack_message})
             )
-        if len(result_d) == 0:
-            slack_message = '<!here> no mails found at mailgun logs!'
+        for w in timeouts:
             requests.post(
                 config['slack'],
                 headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': slack_message})
+                data=json.dumps({'text': '<!here> TIMEOUT ' + w})
             )
     else:
         print('\n'.join(result))
