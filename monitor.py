@@ -34,15 +34,15 @@ else:
     timestamp_format = config['timestamp']
 
 for service in config['services']:
-    command = [sys.executable, os.path.join(workdir,"pinger.py"), '--service', service]
+    command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if dnp_ping.returncode != 0:
         if args.mail:
             for recepient in config['smtp']['to']:
                 msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
                 msg['Subject'] = config['smtp']['subject'] + ' ' + str(service)
-                msg['From']    = config['smtp']['from']
-                msg['To']      = recepient
+                msg['From'] = config['smtp']['from']
+                msg['To'] = recepient
                 s = smtplib.SMTP(config['smtp']['host'], config['smtp']['port'])
                 s.login(config['smtp']['login'], config['smtp']['password'])
                 s.sendmail(msg['From'], msg['To'], msg.as_string())
@@ -51,9 +51,11 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message = '<!here> ' + platform.node() + ' ```' + dnp_ping.stdout.decode("UTF-8") + '```'
         else:
-            slack_message = "[%s] %s: %s OK" % (datetime.utcnow().strftime(timestamp_format), nodename, service)
+            slack_message = "[%s] %s: %s OK" % (datetime.utcnow().strftime(timestamp_format),
+                                                nodename, service)
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
-            data=json.dumps({'text': slack_message})
+            data=json.dumps({'text': slack_message}),
+            timeout=5
         )
