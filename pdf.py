@@ -24,7 +24,8 @@ with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check PDF health')
-argparser.add_argument('--service', help='service name', choices=[str(s) for s in config['services']], required=True)
+argparser.add_argument('--service', help='service name',
+                       choices=[str(s) for s in config['services']], required=True)
 argparser.add_argument('--send', help='send PDF sample', action="store_true")
 argparser.add_argument('--pop3', help='check pop3 mailbox', action="store_true")
 argparser.add_argument('--mailgun', help='check mailgun API', action="store_true")
@@ -34,7 +35,8 @@ args = argparser.parse_args()
 if args.send:
     print(config['services'][args.service])
     # loading requested protocol
-    protocol = importlib.import_module('protocol.v' + str(config['services'][args.service]['protocol']))
+    protocol = importlib.import_module(
+        'protocol.v' + str(config['services'][args.service]['protocol']))
 
     session = socks.socksocket()
     session.set_proxy(socks.SOCKS4, config['services'][args.service]['host'], 443)
@@ -96,6 +98,7 @@ elif args.mailgun:
     r = json.loads(requests.get(
         config['mailgun']['url'] + '/events',
         auth=("api", config['mailgun']['key']),
+        timeout=5
     ).text)
     result = list()
     result_d = dict()
@@ -154,13 +157,15 @@ elif args.mailgun:
             requests.post(
                 config['slack'],
                 headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': slack_message})
+                data=json.dumps({'text': slack_message}),
+                timeout=5
             )
         for w in timeouts:
             requests.post(
                 config['slack'],
                 headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': '<!here> TIMEOUT ' + w})
+                data=json.dumps({'text': '<!here> TIMEOUT ' + w}),
+                timeout=5
             )
     else:
         print('\n'.join(result))
