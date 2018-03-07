@@ -10,7 +10,8 @@ import requests
 import json
 import platform
 import sys
-from datetime import datetime
+import sqlite3
+import time
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check configured services health')
@@ -33,9 +34,25 @@ if 'timestamp' not in config:
 else:
     timestamp_format = config['timestamp']
 
+sql_conn = sqlite3.connect(os.path.join(workdir, '.storage.db'))
+sql_c = sql_conn.cursor()
+sql_c.execute('''CREATE TABLE IF NOT EXISTS history (
+                      timestamp INTEGER,
+                      service VARCHAR(10),
+                      code INTEGER,
+                      std TEXT)''')
+
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    sql_c.execute('INSERT INTO history VALUES (?, ?, ?, ?)',
+                  (
+                        int(time.time()),
+                        service,
+                        dnp_ping.returncode,
+                        dnp_ping.stdout.decode("UTF-8"))
+                  )
+    sql_conn.commit()
     if dnp_ping.returncode != 0:
         if args.mail:
             for recepient in config['smtp']['to']:
@@ -49,13 +66,12 @@ for service in config['services']:
                 s.quit()
     if args.slack:
         if dnp_ping.returncode != 0:
-            slack_message = '<!here> ' + platform.node() + ' ```' + dnp_ping.stdout.decode("UTF-8") + '```'
-        else:
-            slack_message = "[%s] %s: %s OK" % (datetime.utcnow().strftime(timestamp_format),
-                                                nodename, service)
-        requests.post(
-            config['slack'],
-            headers={'Content-type': 'application/json'},
-            data=json.dumps({'text': slack_message}),
-            timeout=5
-        )
+            slack_message = '<!here> {} ```{}```'.format(
+                platform.node(), dnp_ping.stdout.decode("UTF-8"))
+            requests.post(
+                config['slack'],
+                headers={'Content-type': 'application/json'},
+                data=json.dumps({'text': slack_message}),
+                timeout=5
+            )
+sql_conn.close()
