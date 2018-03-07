@@ -37,7 +37,7 @@ else:
 sql_conn = sqlite3.connect(os.path.join(workdir, '.storage.db'))
 sql_c = sql_conn.cursor()
 sql_c.execute('''CREATE TABLE IF NOT EXISTS history (
-                      timestamp INTEGER,
+                      timestamp INTEGER NOT NULL PRIMARY KEY,
                       service VARCHAR(10),
                       code INTEGER,
                       std TEXT)''')
