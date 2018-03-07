@@ -64,8 +64,7 @@ for service in config['services']:
                 s.login(config['smtp']['login'], config['smtp']['password'])
                 s.sendmail(msg['From'], msg['To'], msg.as_string())
                 s.quit()
-    if args.slack:
-        if dnp_ping.returncode != 0:
+        if args.slack:
             slack_message = '<!here> {} ```{}```'.format(
                 platform.node(), dnp_ping.stdout.decode("UTF-8"))
             requests.post(
