@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.dnp.Pinger.agent</string>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/Frameworks/Python.framework/Versions/3.6/bin/python3</string>
+		<string>/Users/admin/pinger/monitor.py</string>
+		<string>--slack</string>
+		<string>--mail</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/admin/pinger/err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/admin/pinger/out.log</string>
+	<key>StartInterval</key>
+	<integer>300</integer>
+</dict>
+</plist>
