@@ -42,35 +42,59 @@ sql_c.execute('''CREATE TABLE IF NOT EXISTS history (
                       code INTEGER,
                       std TEXT)''')
 
+last_rows = sql_c.execute(
+    'SELECT MAX(timestamp),service,code FROM history GROUP BY service').fetchall()
+last_checks = dict()
+if len(last_rows) > 0:
+    for r in last_rows:
+        last_checks.update({
+            r[1]: {
+                'timestamp': r[0],
+                'code': r[2]
+            }
+        })
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    sql_c.execute('INSERT INTO history VALUES (?, ?, ?, ?)',
-                  (
-                        int(time.time()),
-                        service,
-                        dnp_ping.returncode,
-                        dnp_ping.stdout.decode("UTF-8"))
-                  )
-    sql_conn.commit()
-    if dnp_ping.returncode != 0:
-        if args.mail:
-            for recepient in config['smtp']['to']:
-                msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
-                msg['Subject'] = config['smtp']['subject'] + ' ' + str(service)
-                msg['From'] = config['smtp']['from']
-                msg['To'] = recepient
-                s = smtplib.SMTP(config['smtp']['host'], config['smtp']['port'])
-                s.login(config['smtp']['login'], config['smtp']['password'])
-                s.sendmail(msg['From'], msg['To'], msg.as_string())
-                s.quit()
-        if args.slack:
-            slack_message = '<!here> {} ```{}```'.format(
-                platform.node(), dnp_ping.stdout.decode("UTF-8"))
-            requests.post(
-                config['slack'],
-                headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': slack_message}),
-                timeout=5
-            )
+    if service not in last_checks or last_checks[service]['code'] != dnp_ping.returncode:
+        sql_c.execute('INSERT INTO history VALUES (?, ?, ?, ?)',
+                      (
+                            int(time.time()),
+                            service,
+                            dnp_ping.returncode,
+                            dnp_ping.stdout.decode("UTF-8"))
+                      )
+        sql_conn.commit()
+        if dnp_ping.returncode != 0:
+            if args.mail:
+                for recepient in config['smtp']['to']:
+                    msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
+                    msg['Subject'] = config['smtp']['subject'] + ' ' + str(service)
+                    msg['From'] = config['smtp']['from']
+                    msg['To'] = recepient
+                    s = smtplib.SMTP(config['smtp']['host'], config['smtp']['port'])
+                    s.login(config['smtp']['login'], config['smtp']['password'])
+                    s.sendmail(msg['From'], msg['To'], msg.as_string())
+                    s.quit()
+            if args.slack:
+                slack_message = '<!here> {} ```{}```'.format(
+                    platform.node(), dnp_ping.stdout.decode("UTF-8"))
+                requests.post(
+                    config['slack'],
+                    headers={'Content-type': 'application/json'},
+                    data=json.dumps({'text': slack_message}),
+                    timeout=5
+                )
+    else:
+        sql_c.execute('''UPDATE history
+                         SET timestamp=?, code=?, std=?
+                         WHERE service=? AND timestamp=?''',
+                      (
+                          int(time.time()),
+                          dnp_ping.returncode,
+                          dnp_ping.stdout.decode("UTF-8"),
+                          service,
+                          last_checks[service]['timestamp']
+                      ))
+        sql_conn.commit()
 sql_conn.close()
