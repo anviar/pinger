@@ -66,6 +66,8 @@ for service in config['services']:
                       )
         sql_conn.commit()
         if dnp_ping.returncode != 0:
+            slack_message = '<!here> {} ```{}```'.format(
+                platform.node(), dnp_ping.stdout.decode("UTF-8"))
             if args.mail:
                 for recepient in config['smtp']['to']:
                     msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
@@ -76,15 +78,15 @@ for service in config['services']:
                     s.login(config['smtp']['login'], config['smtp']['password'])
                     s.sendmail(msg['From'], msg['To'], msg.as_string())
                     s.quit()
-            if args.slack:
-                slack_message = '<!here> {} ```{}```'.format(
-                    platform.node(), dnp_ping.stdout.decode("UTF-8"))
-                requests.post(
-                    config['slack'],
-                    headers={'Content-type': 'application/json'},
-                    data=json.dumps({'text': slack_message}),
-                    timeout=5
-                )
+        else:
+            slack_message = '{} service recovered: {}'.format(platform.node(), service)
+        if args.slack:
+            requests.post(
+                config['slack'],
+                headers={'Content-type': 'application/json'},
+                data=json.dumps({'text': slack_message}),
+                timeout=5
+            )
     else:
         sql_c.execute('''UPDATE history
                          SET timestamp=?, code=?, std=?
