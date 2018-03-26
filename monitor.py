@@ -53,6 +53,9 @@ if len(last_rows) > 0:
                 'code': r[2]
             }
         })
+
+slack_message = {'attachments': []}
+
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -66,8 +69,12 @@ for service in config['services']:
                       )
         sql_conn.commit()
         if dnp_ping.returncode != 0:
-            slack_message = '<!here> {} ```{}```'.format(
-                platform.node(), dnp_ping.stdout.decode("UTF-8"))
+            slack_message['attachments'].append({
+                'color': '#ff0000',
+                'text': '```{}```'.format(dnp_ping.stdout.decode("UTF-8")),
+                'author_name': platform.node(),
+                'title': '{} failed'.format(service),
+            })
             if args.mail:
                 for recepient in config['smtp']['to']:
                     msg = MIMEText(dnp_ping.stdout.decode("UTF-8"))
@@ -79,14 +86,11 @@ for service in config['services']:
                     s.sendmail(msg['From'], msg['To'], msg.as_string())
                     s.quit()
         else:
-            slack_message = '{} service recovered: {}'.format(platform.node(), service)
-        if args.slack:
-            requests.post(
-                config['slack'],
-                headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': slack_message}),
-                timeout=5
-            )
+            slack_message['attachments'].append({
+                'color': '#00ff00',
+                'author_name': platform.node(),
+                'title': '{} recovered'.format(service),
+            })
     else:
         sql_c.execute('''UPDATE history
                          SET timestamp=?, code=?, std=?
@@ -100,3 +104,11 @@ for service in config['services']:
                       ))
         sql_conn.commit()
 sql_conn.close()
+
+if args.slack and len(slack_message['attachments']) > 0:
+    requests.post(
+        config['slack'],
+        headers={'Content-type': 'application/json'},
+        data=json.dumps(slack_message),
+        timeout=5
+    )
