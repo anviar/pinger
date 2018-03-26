@@ -59,10 +59,11 @@ slack_message = {'attachments': []}
 for service in config['services']:
     command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    ts = int(time.time())
     if service not in last_checks or last_checks[service]['code'] != dnp_ping.returncode:
         sql_c.execute('INSERT INTO history VALUES (?, ?, ?, ?)',
                       (
-                            int(time.time()),
+                            ts,
                             service,
                             dnp_ping.returncode,
                             dnp_ping.stdout.decode("UTF-8"))
@@ -74,6 +75,7 @@ for service in config['services']:
                 'text': '```{}```'.format(dnp_ping.stdout.decode("UTF-8")),
                 'author_name': platform.node(),
                 'title': '{} failed'.format(service),
+                'ts': ts
             })
             if args.mail:
                 for recepient in config['smtp']['to']:
@@ -90,13 +92,14 @@ for service in config['services']:
                 'color': '#00ff00',
                 'author_name': platform.node(),
                 'title': '{} recovered'.format(service),
+                'ts': ts
             })
     else:
         sql_c.execute('''UPDATE history
                          SET timestamp=?, code=?, std=?
                          WHERE service=? AND timestamp=?''',
                       (
-                          int(time.time()),
+                          ts,
                           dnp_ping.returncode,
                           dnp_ping.stdout.decode("UTF-8"),
                           service,
