@@ -72,7 +72,7 @@ for service in config['services']:
         if dnp_ping.returncode != 0:
             slack_message['attachments'].append({
                 'color': '#ff0000',
-                'text': '```{}```'.format(dnp_ping.stdout.decode("UTF-8")),
+                'text': dnp_ping.stdout.decode("UTF-8"),
                 'author_name': platform.node(),
                 'title': '{} failed'.format(service),
                 'ts': ts
