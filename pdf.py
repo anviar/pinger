@@ -9,15 +9,9 @@ import platform
 from datetime import datetime, timedelta
 import requests
 import json
+import sqlite3
 
 workdir = os.path.dirname(os.path.realpath(__file__))
-catalog_path = os.path.join(workdir, 'pdf_catalog')
-
-catalog = set()
-if os.path.isfile(catalog_path):
-    with open(catalog_path, 'rt') as catalog_obj:
-        for line in catalog_obj:
-            catalog.add(line.strip())
 
 with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
     config = yaml.load(config_obj)
@@ -31,6 +25,18 @@ argparser.add_argument('--pop3', help='check pop3 mailbox', action="store_true")
 argparser.add_argument('--mailgun', help='check mailgun API', action="store_true")
 argparser.add_argument('--slack', help='send slack notifications', action="store_true")
 args = argparser.parse_args()
+
+sql_conn = sqlite3.connect(os.path.join(workdir, '.storage.db'))
+sql_c = sql_conn.cursor()
+sql_c.execute('''CREATE TABLE IF NOT EXISTS pdf (
+                      timestamp INTEGER NOT NULL PRIMARY KEY,
+                      service VARCHAR(10),
+                      success INTEGER)''')
+uncatched_rows = sql_c.execute(
+    'SELECT timestamp FROM pdf WHERE service=? AND success ISNULL',
+    (args.service, )).fetchall()
+catalog = {ts for ts, in uncatched_rows}
+slack_message = {'attachments': []}
 
 if args.send:
     print(config['services'][args.service])
@@ -56,10 +62,9 @@ if args.send:
         session,
         config['services'][args.service]['pdf_recipients'],
         pdf_timestamp)
-    catalog.add(pdf_timestamp)
-    with open(catalog_path, 'wt') as catalog_obj:
-        for ts in catalog:
-            catalog_obj.write(str(ts) + '\n')
+    sql_c.execute(
+        'INSERT INTO pdf(timestamp, service) VALUES (?, ?)', (pdf_timestamp, args.service))
+    sql_conn.commit()
     protocol.opcode_logout(session)
     session.close()
 elif args.pop3:
@@ -101,71 +106,68 @@ elif args.mailgun:
         timeout=5
     ).text)
     result = list()
-    result_d = dict()
     timeouts = list()
     for item in r['items']:
         if (
-                item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
+            item['message']['headers']['subject'].startswith(config['pop3']['search_tag']['subject'])
             and 'delivery-status' in item
         ):
-            if item['message']['headers']['subject'].split(':')[1].strip() in catalog:
-                pdf_timestamp = datetime.fromtimestamp(
-                    int(item['message']['headers']['subject'].split(':')[1])
-                )
+            ts = int(item['message']['headers']['subject'].split(':')[1].strip())
+            if ts in catalog:
+                pdf_timestamp = datetime.fromtimestamp(ts)
             else:
                 # skip already processed messages
                 continue
             delivery_timestamp = datetime.utcfromtimestamp(item['timestamp'])
-            if pdf_timestamp not in result_d:
-                result_d.update({pdf_timestamp: {
-                    'target': item['envelope']['targets'],
-                    'delta': delivery_timestamp - pdf_timestamp,
-                    'delivered': delivery_timestamp.strftime('%Y %b %d %H:%M:%S')
-                }})
-            result.append("%s: %s ~ %s" %
-                          (pdf_timestamp, item['envelope']['targets'], delivery_timestamp - pdf_timestamp))
-            catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
+            result.append("{}: {} ~ {}".format(
+                          pdf_timestamp,
+                          item['envelope']['targets'],
+                          delivery_timestamp - pdf_timestamp))
+            sql_c.execute('UPDATE pdf SET success=? WHERE service=? AND timestamp=?',
+                          (
+                              (delivery_timestamp - pdf_timestamp).seconds,
+                              args.service,
+                              ts
+                           )
+                          )
+            sql_conn.commit()
+            if delivery_timestamp - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
+                slack_message['attachments'].append({
+                    'color': '#ffff00',
+                    'text': '{}: PDF {}'.format(item['envelope']['targets'],
+                                                delivery_timestamp - pdf_timestamp),
+                    'author_name': platform.node(),
+                    'title': 'PDF {} warning'.format(args.service),
+                    'ts': item['timestamp']
+                })
+            else:
+                slack_message['attachments'].append({
+                    'color': '#00ff00',
+                    'text': '{} ~ {}'.format(pdf_timestamp, delivery_timestamp - pdf_timestamp),
+                    'author_name': platform.node(),
+                    'title': 'PDF {}'.format(args.service),
+                    'ts': item['timestamp']
+                })
     for ts in catalog:
         pdf_timestamp = datetime.fromtimestamp(int(ts))
         if datetime.utcnow() - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
-            timeouts.append(pdf_timestamp)
-            catalog.remove(item['message']['headers']['subject'].split(':')[1].strip())
-    # saving catalog state
-    with open(catalog_path, 'wt') as catalog_obj:
-        for ts in catalog:
-            catalog_obj.write(str(ts) + '\n')
+            sql_c.execute('UPDATE pdf SET success=? WHERE service=? AND timestamp=?',
+                          (-1, args.service, ts))
+            sql_conn.commit()
+            slack_message['attachments'].append({
+                'color': '#ff0000',
+                'text': 'timeout',
+                'author_name': platform.node(),
+                'title': 'PDF {}'.format(args.service),
+                'ts': ts
+            })
     if args.slack:
-        if 'timestamp' not in config:
-            timestamp_format = '%H:%M UTC'
-        else:
-            timestamp_format = config['timestamp']
-        if 'nodename' not in config:
-            nodename = platform.node()
-        else:
-            nodename = config['nodename']
-        for item in result_d:
-            if result_d[item]['delta'] > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
-                slack_message = '<!here> at %s ``` %s: PDF %s - warning ```' % \
-                                (result_d[item]['delivered'], result_d[item]['target'], result_d[item]['delta'])
-            else:
-                slack_message = "[%s] %s: to <%s> at %s PDF ~ %s - OK" % \
-                                (datetime.utcnow().strftime(timestamp_format),
-                                 args.service,
-                                 result_d[item]['target'],
-                                 result_d[item]['delivered'],
-                                 result_d[item]['delta'])
-            requests.post(
-                config['slack'],
-                headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': slack_message}),
-                timeout=5
-            )
-        for w in timeouts:
-            requests.post(
-                config['slack'],
-                headers={'Content-type': 'application/json'},
-                data=json.dumps({'text': '<!here> TIMEOUT ' + w}),
-                timeout=5
-            )
+        slack_message = {'attachments': []}
+        requests.post(
+            config['slack'],
+            headers={'Content-type': 'application/json'},
+            data=json.dumps(slack_message),
+            timeout=5)
     else:
         print('\n'.join(result))
+sql_conn.close()
