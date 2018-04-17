@@ -26,16 +26,14 @@ argparser.add_argument('--mailgun', help='check mailgun API', action="store_true
 argparser.add_argument('--slack', help='send slack notifications', action="store_true")
 args = argparser.parse_args()
 
+pdf_timeout = timedelta(minutes=config['services'][args.service]['pdf_timeout'])
+
 sql_conn = sqlite3.connect(os.path.join(workdir, '.storage.db'))
 sql_c = sql_conn.cursor()
 sql_c.execute('''CREATE TABLE IF NOT EXISTS pdf (
                       timestamp INTEGER NOT NULL PRIMARY KEY,
                       service VARCHAR(10),
                       success INTEGER)''')
-uncatched_rows = sql_c.execute(
-    'SELECT timestamp FROM pdf WHERE service=? AND success ISNULL',
-    (args.service, )).fetchall()
-catalog = {ts for ts, in uncatched_rows}
 slack_message = {'attachments': []}
 
 if args.send:
@@ -113,7 +111,10 @@ elif args.mailgun:
             and 'delivery-status' in item
         ):
             ts = int(item['message']['headers']['subject'].split(':')[1].strip())
-            if ts in catalog:
+            catalog_check = sql_c.execute(
+                'SELECT 1 FROM pdf WHERE service=? AND success ISNULL AND timestamp=?',
+                (args.service, ts)).fetchall()
+            if len(catalog_check) > 0:
                 pdf_timestamp = datetime.fromtimestamp(ts)
             else:
                 # skip already processed messages
@@ -131,7 +132,7 @@ elif args.mailgun:
                            )
                           )
             sql_conn.commit()
-            if delivery_timestamp - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
+            if delivery_timestamp - pdf_timestamp > pdf_timeout:
                 slack_message['attachments'].append({
                     'color': '#ffff00',
                     'text': '{}: PDF {}'.format(item['envelope']['targets'],
@@ -148,9 +149,13 @@ elif args.mailgun:
                     'title': 'PDF {}'.format(args.service),
                     'ts': item['timestamp']
                 })
+    uncatched_rows = sql_c.execute(
+        'SELECT timestamp FROM pdf WHERE service=? AND success ISNULL',
+        (args.service, )).fetchall()
+    catalog = {ts for ts, in uncatched_rows}
     for ts in catalog:
         pdf_timestamp = datetime.fromtimestamp(int(ts))
-        if datetime.utcnow() - pdf_timestamp > timedelta(minutes=config['services'][args.service]['pdf_timeout']):
+        if datetime.utcnow() - pdf_timestamp > pdf_timeout:
             sql_c.execute('UPDATE pdf SET success=? WHERE service=? AND timestamp=?',
                           (-1, args.service, ts))
             sql_conn.commit()
@@ -162,7 +167,6 @@ elif args.mailgun:
                 'ts': ts
             })
     if args.slack:
-        slack_message = {'attachments': []}
         requests.post(
             config['slack'],
             headers={'Content-type': 'application/json'},
