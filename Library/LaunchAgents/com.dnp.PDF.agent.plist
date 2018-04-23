@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.dnp.Pinger.agent</string>
+	<string>com.dnp.PDF.agent</string>
 	<key>LimitLoadToSessionType</key>
 	<string>Aqua</string>
 	<key>ProgramArguments</key>
