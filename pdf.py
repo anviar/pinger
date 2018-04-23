@@ -24,10 +24,10 @@ sql_c.execute('''CREATE TABLE IF NOT EXISTS pdf (
 slack_message = {'attachments': []}
 checks = set()
 for s in config['services']:
-    if 'pdf_timeout' in config['services'][s] and 'pdf_timeout' in config['services'][s]:
+    if 'pdf' in config['services'][s]:
         checks.add(s)
 for service in checks:
-    pdf_timeout = timedelta(minutes=config['services'][service]['pdf_timeout'])
+    pdf_timeout = timedelta(minutes=config['services'][service]['pdf']['timeout'])
     catalog_check = sql_c.execute(
                     'SELECT 1 FROM pdf WHERE service=? AND success ISNULL',
                     (service, )).fetchall()
@@ -101,6 +101,14 @@ for service in checks:
                     'ts': ts
                 })
     else:
+        pdf_timestamp = int(datetime.utcnow().timestamp())
+        catalog_check = sql_c.execute(
+            'SELECT MAX(timestamp) FROM pdf WHERE service=? GROUP BY service',
+            (service,)).fetchall()
+        if len(catalog_check) == 1:
+            if datetime.fromtimestamp(pdf_timestamp) - datetime.fromtimestamp(catalog_check[0][0])\
+                    < timedelta(minutes=config['services'][service]['pdf']['interval']):
+                continue
         print(config['services'][service])
         # loading requested protocol
         protocol = importlib.import_module(
@@ -109,7 +117,6 @@ for service in checks:
         session.set_proxy(socks.SOCKS4, config['services'][service]['host'], 443)
         session.settimeout(config['services'][service]['timeout'])
         session.connect(('127.0.0.1', config['services'][service]['port']))
-        pdf_timestamp = int(datetime.utcnow().timestamp())
         protocol.opcode_init(
             session,
             config['services'][service]['protocol'],
@@ -121,7 +128,7 @@ for service in checks:
             config['services'][service]['password'])
         protocol.opcode_pdf_pinger(
             session,
-            config['services'][service]['pdf_recipients'],
+            config['services'][service]['pdf']['recipients'],
             pdf_timestamp)
         sql_c.execute(
             'INSERT INTO pdf(timestamp, service) VALUES (?, ?)', (pdf_timestamp, service))

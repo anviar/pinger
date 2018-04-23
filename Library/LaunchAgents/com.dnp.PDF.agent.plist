@@ -16,6 +16,6 @@
 	<key>StandardOutPath</key>
 	<string>/Users/admin/pinger/out.log</string>
 	<key>StartInterval</key>
-	<integer>1200</integer>
+	<integer>300</integer>
 </dict>
 </plist>
