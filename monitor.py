@@ -57,6 +57,8 @@ if len(last_rows) > 0:
 slack_message = {'attachments': []}
 
 for service in config['services']:
+    if 'ping' not in config['services'][service]:
+        continue
     command = [sys.executable, os.path.join(workdir, "pinger.py"), '--service', service]
     dnp_ping = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     ts = int(time.time())

@@ -15,7 +15,10 @@ with open(os.path.join(workdir, "config.yml"), 'r') as config_obj:
 
 # Preparing arguments
 argparser = ArgumentParser(description='Check service health')
-argparser.add_argument('--service', help='service name', choices=[str(s) for s in config['services']], required=True)
+argparser.add_argument('--service',
+                       help='service name',
+                       choices=[str(s) for s in config['services']],
+                       required=True)
 args = argparser.parse_args()
 print(config['services'][args.service])
 
